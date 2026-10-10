@@ -41,16 +41,19 @@ def _retryable(exc: BaseException) -> bool:
 
 @retry(retry=retry_if_exception(_retryable), stop=stop_after_attempt(4),
        wait=wait_exponential(multiplier=2, min=2, max=30), reraise=True)
-def _generate(cfg: ModelCfg, system: str, user_text: str, image_png: bytes, schema: dict) -> dict:
+def _generate(cfg: ModelCfg, system: str, user_text: str, image_png: bytes | None, schema: dict) -> dict:
     if cfg.provider != "google":
         raise NotImplementedError(f"provider {cfg.provider!r} not wired yet, add it when the bake-off needs it")
     from google import genai
     from google.genai import types
 
     client = genai.Client(api_key=cfg.api_key)
+    contents = [user_text]
+    if image_png is not None:
+        contents.insert(0, types.Part.from_bytes(data=image_png, mime_type="image/png"))
     resp = client.models.generate_content(
         model=cfg.model,
-        contents=[types.Part.from_bytes(data=image_png, mime_type="image/png"), user_text],
+        contents=contents,
         config=types.GenerateContentConfig(
             system_instruction=system,
             temperature=cfg.temperature,
@@ -62,9 +65,10 @@ def _generate(cfg: ModelCfg, system: str, user_text: str, image_png: bytes, sche
     return json.loads(resp.text)
 
 
-def call(cfg: ModelCfg, system: str, user_text: str, image_path: str | Path, schema: dict) -> dict:
-    image_png = prepare_image(Path(image_path))
-    path = CACHE_DIR / f"{_cache_key(cfg, system, user_text, image_png, schema)}.json"
+def call(cfg: ModelCfg, system: str, user_text: str, image_path: str | Path | None, schema: dict) -> dict:
+    """image_path None makes a text-only call (Level 2)."""
+    image_png = prepare_image(Path(image_path)) if image_path is not None else None
+    path = CACHE_DIR / f"{_cache_key(cfg, system, user_text, image_png or b'', schema)}.json"
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
     result = _generate(cfg, system, user_text, image_png, schema)

@@ -108,3 +108,60 @@ def _clean(value):
 def extract_l1(image_path: str | Path, cfg: ModelCfg) -> dict:
     raw = llm.call(cfg, SYSTEM, USER, image_path, Level1.model_json_schema())
     return _clean(Level1.model_validate(raw).model_dump())
+
+
+# ---- extras for Level 2 (not written to level1.csv) ----
+
+class UsageMonth(BaseModel):
+    month: str
+    units: float | None
+
+
+class PaymentMonth(BaseModel):
+    month: str
+    billed: float | None
+    paid: float | None
+
+
+class SlabLine(BaseModel):
+    label: str
+    units: float | None
+    rate: float | None
+    amount: float | None
+
+
+class PrintedSplit(BaseModel):
+    energy_pct: float | None
+    taxes_pct: float | None
+
+
+class Extras(BaseModel):
+    usage_history: list[UsageMonth]
+    payment_history: list[PaymentMonth]
+    printed_split: PrintedSplit
+    slab_lines: list[SlabLine]
+    notes: list[str]
+
+
+EXTRAS_SYSTEM = """You read one Pakistani electricity bill image (K-Electric, LESCO or IESCO) and return extra printed information as JSON matching the schema. The bill may be a scan, screenshot or tilted photo, and may be partly in Urdu.
+
+GENERAL RULES
+- Copy values AS PRINTED. Never calculate, round or correct anything. Use null for a value that is blank, hidden or unreadable. Never guess.
+- Numbers are JSON numbers without commas. A minus sign or "CR" suffix means negative.
+- Months are "YYYY-MM": "Sep25", "SEP 25" or "Sep-25" -> "2025-09". A K-Electric "05/26" is MM/YY -> "2026-05" (use the billed month, not the pay date).
+- Output no personal identifiers: no names, addresses, CNIC, account, reference, consumer or meter numbers.
+
+FIELDS
+- usage_history: the monthly units table, one entry per month in printed order. K-Electric: the 13 month usage history bars. LESCO and IESCO: the UNITS column of the bill history table. Include the current month if the table includes it.
+- payment_history: billed and paid amount per month, in printed order. K-Electric: the billing and payment history table (billed amount, payment). LESCO and IESCO: the BILL (RS.) and PAYMENT (RS.) columns of the bill history table. paid is null when the payment cell is blank.
+- printed_split: the percentages the bill itself prints for energy (charges) and for taxes, for example "83.39 %" and "16.61 %" beside the energy charges and taxes and duties totals. null for each one that is not printed.
+- slab_lines: each charge line in the bill calculation that prints units and a rate (for example "Variable Upto 100 Units", fixed charges, adjustments). label as printed, units, rate, amount. Empty list when the bill prints no units and rate columns.
+- notes: up to 8 short English strings of printed, non-identifying information that helps explain the bill: consumer category (for example Protected), net metering marker, message board text, notes saying a subsidy or FPA is included, and similar. Empty list if there is none.
+"""
+
+EXTRAS_USER = "Extract the extra data for this bill."
+
+
+def extract_extras(image_path: str | Path, cfg: ModelCfg) -> dict:
+    raw = llm.call(cfg, EXTRAS_SYSTEM, EXTRAS_USER, image_path, Extras.model_json_schema())
+    return _clean(Extras.model_validate(raw).model_dump())
