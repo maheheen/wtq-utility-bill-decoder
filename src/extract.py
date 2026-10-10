@@ -55,7 +55,7 @@ GENERAL RULES
 
 FIELDS
 - provider: "KE" for K-Electric, "LESCO", "IESCO".
-- tariff: the value next to the label "Tariff" exactly as printed (A1-R, A-1a(01)). Not "Tariff Category" (Domestic, Commercial).
+- tariff: the value next to the label "Tariff", copied character by character exactly as printed (A1-R, A-1a(01)). Keep every character: letters, digits, hyphens, brackets and any trailing letters after the brackets. Never shorten, clean up or normalise it. Not "Tariff Category" (Domestic, Commercial).
 - sanctioned_load_kw: label Sanc Load, S.Load, San Load.
 - reading_date, issue_date, due_date: by their labels. due_date is the last date to pay without late payment surcharge, not a later "upto" or "till" date in the late-payment columns.
 - previous_reading, current_reading, units_consumed: the meter reading table of this month. units_consumed is the units billed this month as printed. If several meter rows exist (net metering), units_consumed is the printed "Current Month N units" figure when one exists, otherwise use the first meter row for previous reading, current reading and units.
