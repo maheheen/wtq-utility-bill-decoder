@@ -25,6 +25,13 @@ Check the output:
 python tools/verify_outputs.py
 ```
 
+### Optional: web UI
+A small local page to decode one bill at a time (upload an image or pick a sample), using the same pipeline and cache as the CLI:
+```
+python -m src.ui --bills ../data/test/bills --questions ../data/test/csv/level2.csv
+```
+It opens http://127.0.0.1:8000 and only listens on your own machine. No extra packages are needed.
+
 ## How it works
 1. Vision extraction of each bill into a fixed JSON schema (model temperature 0 where supported), validated with pydantic.
 2. Printed values are taken as printed and never rewritten by code. Results are cached on disk by hash of image, prompt, model and schema, so reruns give the same answer.
@@ -48,7 +55,7 @@ Retries with backoff on API errors and rate limits. A bill that fails completely
 
 ## Project layout
 ```
-src/       pipeline code
+src/       pipeline code (run.py is the CLI, ui.py + ui_page.html the optional web UI)
 tools/     verify_outputs.py, make_zip.py, make_fake_templates.py
 tests/     golden test for KESC_0008 (run: pytest)
 docs/      spec, plan, layout notes

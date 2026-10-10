@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bill Decoder</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --border: #e3e6ec; --text: #12151c; --muted: #667085;
+    --accent: #2563eb; --accent-ink: #ffffff; --accent-soft: #e8efff; --credit: #0f8a5f; --warn: #b54708;
+    --shadow: 0 1px 2px rgba(16,24,40,.05), 0 8px 24px rgba(16,24,40,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d0f14; --surface: #161922; --border: #262b38; --text: #eef1f6; --muted: #8b93a7;
+      --accent: #6b9bff; --accent-ink: #0b1020; --accent-soft: #1b2745; --credit: #4ade9a; --warn: #fdb022;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d0f14; --surface: #161922; --border: #262b38; --text: #eef1f6; --muted: #8b93a7;
+    --accent: #6b9bff; --accent-ink: #0b1020; --accent-soft: #1b2745; --credit: #4ade9a; --warn: #fdb022;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: light dark; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 28px 16px 64px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  .mark { width: 34px; height: 34px; border-radius: 10px; background: var(--accent); display: grid; place-items: center; }
+  .mark svg { width: 20px; height: 20px; fill: var(--accent-ink); }
+  h1 { font-size: 18px; margin: 0; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .grow { flex: 1; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); }
+  .drop { padding: 28px; text-align: center; border: 1.5px dashed var(--border); border-radius: 16px; background: var(--surface); cursor: pointer; transition: border-color .15s, background .15s; }
+  .drop:hover, .drop.over, .drop:focus-visible { border-color: var(--accent); background: var(--accent-soft); outline: none; }
+  .drop strong { display: block; font-size: 16px; margin-bottom: 4px; }
+  .drop span { color: var(--muted); font-size: 13px; }
+  .picked { display: flex; gap: 16px; align-items: center; padding: 14px; }
+  .picked img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); }
+  .picked .name { font-weight: 600; word-break: break-all; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+  button { font: inherit; cursor: pointer; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 8px 14px; }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .55; cursor: default; }
+  .samples { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .samples .label { color: var(--muted); font-size: 13px; margin-right: 2px; }
+  .chip { padding: 4px 10px; font-size: 13px; border-radius: 999px; }
+  .status { margin-top: 20px; text-align: center; color: var(--muted); }
+  .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent); display: inline-block; vertical-align: -4px; margin-right: 8px; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error { color: var(--warn); }
+  .hidden { display: none !important; }
+  #results { margin-top: 24px; }
+  .headline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .badge { background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 3px 12px; font-weight: 600; font-size: 13px; }
+  .tag { color: var(--muted); font-size: 14px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+  .stat { padding: 16px; }
+  .stat .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  .stat .v { font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin: 2px 0; font-variant-numeric: tabular-nums; }
+  .stat .d { color: var(--muted); font-size: 13px; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; overflow-x: auto; }
+  .tab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 10px 14px; color: var(--muted); }
+  .tab:hover { color: var(--text); }
+  .tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  .qa { padding: 16px 18px; margin-bottom: 10px; }
+  .qa .q { color: var(--muted); font-size: 13px; margin-bottom: 4px; }
+  .qa .q b { color: var(--accent); margin-right: 6px; }
+  .qa .a { font-size: 15px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .panel { padding: 16px 18px; }
+  .panel h3 { margin: 0 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 8px 0; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  td:last-child { text-align: right; white-space: nowrap; }
+  tr.total td { font-weight: 700; border-bottom: 0; }
+  .credit { color: var(--credit); }
+  .empty { color: var(--muted); padding: 8px 0; }
+  .bar { height: 10px; border-radius: 999px; overflow: hidden; display: flex; background: var(--border); margin: 14px 0 6px; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .bar i + i { background: var(--warn); }
+  .legend { display: flex; gap: 16px; color: var(--muted); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 24px; padding: 6px 18px; }
+  .row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .row span:first-child { color: var(--muted); }
+  .row span:last-child { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+  pre { margin: 0; padding: 16px 18px; overflow: auto; font: 12.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .jsonbar { display: flex; justify-content: flex-end; padding: 10px 14px 0; }
+  .foot { margin-top: 28px; text-align: center; color: var(--muted); font-size: 12px; }
+  @media (max-width: 640px) {
+    .stats, .cols, .grid { grid-template-columns: 1fr; }
+    .picked { flex-wrap: wrap; }
+    .actions { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg></div>
+    <div><h1>Bill Decoder</h1><div class="sub">K-Electric · LESCO · IESCO electricity bills</div></div>
+    <div class="grow"></div>
+    <button id="theme" aria-label="Toggle dark mode" title="Toggle dark mode">◐</button>
+  </header>
+
+  <section id="pick">
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a bill image">
+      <strong>Drop a bill image here</strong>
+      <span>or click to choose a PNG or JPG</span>
+    </div>
+    <input id="file" type="file" accept="image/*" class="hidden">
+    <div class="samples hidden" id="samples"><span class="label">Try a sample:</span></div>
+  </section>
+
+  <section id="chosen" class="card picked hidden">
+    <img id="thumb" alt="Selected bill preview">
+    <div><div class="name" id="fname"></div><div class="sub" id="fsize"></div></div>
+    <div class="actions">
+      <button id="clear">Change</button>
+      <button id="go" class="primary">Decode bill</button>
+    </div>
+  </section>
+
+  <div id="status" class="status hidden" role="status" aria-live="polite"></div>
+
+  <section id="results" class="hidden">
+    <div class="headline"><span class="badge" id="provider"></span><span class="tag" id="meta"></span></div>
+    <div class="stats" id="stats"></div>
+    <div class="tabs" role="tablist" id="tabs">
+      <button class="tab" role="tab" data-tab="answers" aria-selected="true">Answers</button>
+      <button class="tab" role="tab" data-tab="breakdown" aria-selected="false">Breakdown</button>
+      <button class="tab" role="tab" data-tab="details" aria-selected="false">Details</button>
+      <button class="tab" role="tab" data-tab="json" aria-selected="false">JSON</button>
+    </div>
+    <div id="pane-answers"></div>
+    <div id="pane-breakdown" class="hidden"></div>
+    <div id="pane-details" class="hidden"></div>
+    <div id="pane-json" class="hidden"></div>
+    <div class="foot" id="foot"></div>
+  </section>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const NIL = "—";
+
+function h(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined && text !== null) e.textContent = text;
+  return e;
+}
+const num = (n) => new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2,
+}).format(n);
+function pkr(n) {
+  if (n === null || n === undefined) return NIL;
+  return (n < 0 ? "−" : "") + "PKR " + num(Math.abs(n));
+}
+function plain(n) { return n === null || n === undefined ? NIL : num(n); }
+function date(s) {
+  if (!s) return NIL;
+  const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?$/.exec(s);
+  if (!m) return s;
+  const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+m[2] - 1];
+  return m[3] ? `${+m[3]} ${mon} ${m[1]}` : `${mon} ${m[1]}`;
+}
+const ACRONYMS = { fpa: "FPA", gst: "GST" };
+function label(t) {
+  if (ACRONYMS[t]) return ACRONYMS[t];
+  const s = t.replace(/_/g, " ");
+  return s[0].toUpperCase() + s.slice(1);
+}
+
+let file = null;
+let thumbURL = null;
+
+// theme
+try {
+  const saved = localStorage.getItem("theme");
+  if (saved) document.documentElement.dataset.theme = saved;
+} catch (_) {}
+$("#theme").onclick = () => {
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const cur = document.documentElement.dataset.theme || (dark ? "dark" : "light");
+  const next = cur === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("theme", next); } catch (_) {}
+};
+
+// picking a file
+const drop = $("#drop"), input = $("#file");
+drop.onclick = () => input.click();
+drop.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } };
+input.onchange = () => input.files[0] && choose(input.files[0]);
+["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => { const f = e.dataTransfer.files[0]; if (f) choose(f); });
+
+function choose(f) {
+  if (!f.type.startsWith("image/")) return showError("Please choose an image file (PNG or JPG).");
+  file = f;
+  if (thumbURL) URL.revokeObjectURL(thumbURL);
+  thumbURL = URL.createObjectURL(f);
+  $("#thumb").src = thumbURL;
+  $("#fname").textContent = f.name;
+  $("#fsize").textContent = (f.size / 1024 / 1024).toFixed(2) + " MB";
+  $("#pick").classList.add("hidden");
+  $("#chosen").classList.remove("hidden");
+  $("#results").classList.add("hidden");
+  setStatus("");
+}
+$("#clear").onclick = () => {
+  file = null; input.value = "";
+  $("#chosen").classList.add("hidden");
+  $("#pick").classList.remove("hidden");
+  $("#results").classList.add("hidden");
+  setStatus("");
+};
+
+// samples
+fetch("/api/samples").then((r) => r.json()).then((names) => {
+  if (!names.length) return;
+  const box = $("#samples");
+  box.classList.remove("hidden");
+  names.forEach((n) => {
+    const b = h("button", "chip", n.replace(/\.[^.]+$/, ""));
+    b.onclick = async () => {
+      const blob = await (await fetch("/api/sample/" + encodeURIComponent(n))).blob();
+      choose(new File([blob], n, { type: blob.type }));
+    };
+    box.appendChild(b);
+  });
+}).catch(() => {});
+
+// status
+function setStatus(msg, kind) {
+  const s = $("#status");
+  s.textContent = "";
+  s.classList.toggle("hidden", !msg);
+  s.classList.toggle("error", kind === "error");
+  if (!msg) return;
+  if (kind === "busy") s.appendChild(h("span", "spinner"));
+  s.appendChild(document.createTextNode(msg));
+}
+function showError(msg) { setStatus(msg, "error"); }
+
+// decode
+$("#go").onclick = async () => {
+  if (!file) return;
+  const go = $("#go"), clear = $("#clear");
+  go.disabled = clear.disabled = true;
+  $("#results").classList.add("hidden");
+  setStatus("Reading the bill and preparing answers. This takes about 10 to 30 seconds.", "busy");
+  try {
+    const r = await fetch("/api/decode", { method: "POST", body: file });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "Request failed.");
+    setStatus("");
+    render(data);
+  } catch (e) {
+    showError(e.message || "Something went wrong.");
+  } finally {
+    go.disabled = clear.disabled = false;
+  }
+};
+
+// results
+function render(data) {
+  const d = data.level1;
+  if (!data.ok) {
+    $("#results").classList.add("hidden");
+    return showError("This bill could not be read reliably. Try a clearer image.");
+  }
+  $("#provider").textContent = d.provider || "Unknown provider";
+  const bits = [d.bill_month && date(d.bill_month), d.tariff && "Tariff " + d.tariff, d.units_consumed != null && plain(d.units_consumed) + " units"];
+  $("#meta").textContent = bits.filter(Boolean).join("  ·  ");
+
+  const stats = $("#stats");
+  stats.textContent = "";
+  [
+    ["Current bill", pkr(d.current_bill), d.bill_month ? "Bill month " + date(d.bill_month) : ""],
+    ["Pay by due date", pkr(d.payable_within_due_date), d.due_date ? "Due " + date(d.due_date) : ""],
+    ["Pay after due date", pkr(d.payable_after_due_date), "Highest late amount printed"],
+  ].forEach(([k, v, sub]) => {
+    const c = h("div", "card stat");
+    c.append(h("div", "k", k), h("div", "v", v), h("div", "d", sub));
+    stats.appendChild(c);
+  });
+
+  const ans = $("#pane-answers");
+  ans.textContent = "";
+  data.answers.forEach((a) => {
+    const c = h("div", "card qa");
+    const q = h("div", "q");
+    q.append(h("b", null, a.id), document.createTextNode(a.question));
+    c.append(q, h("div", "a", a.answer));
+    ans.appendChild(c);
+  });
+
+  renderBreakdown(d);
+  renderDetails(d);
+
+  const js = $("#pane-json");
+  js.textContent = "";
+  const card = h("div", "card");
+  const bar = h("div", "jsonbar");
+  const copy = h("button", null, "Copy JSON");
+  const text = JSON.stringify(d, null, 2);
+  copy.onclick = async () => {
+    try { await navigator.clipboard.writeText(text); copy.textContent = "Copied"; }
+    catch (_) { copy.textContent = "Copy failed"; }
+    setTimeout(() => (copy.textContent = "Copy JSON"), 1500);
+  };
+  bar.appendChild(copy);
+  card.append(bar, h("pre", null, text));
+  js.appendChild(card);
+
+  $("#foot").textContent = `Decoded in ${data.seconds}s. Values are shown as printed on the bill.`;
+  $("#results").classList.remove("hidden");
+  selectTab("answers");
+  $("#results").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function listPanel(title, items, total) {
+  const p = h("div", "card panel");
+  p.appendChild(h("h3", null, title));
+  if (!items.length && total == null) { p.appendChild(h("div", "empty", "Nothing listed on this bill.")); return p; }
+  const t = h("table");
+  items.forEach((it) => {
+    const tr = h("tr");
+    tr.append(h("td", null, label(it.type)), h("td", it.amount < 0 ? "credit" : null, pkr(it.amount)));
+    t.appendChild(tr);
+  });
+  if (!items.length) {
+    const tr = h("tr");
+    tr.appendChild(h("td", "empty", "Combined amount only, no line breakdown printed"));
+    tr.appendChild(h("td"));
+    t.appendChild(tr);
+  }
+  if (total != null) {
+    const tr = h("tr", "total");
+    tr.append(h("td", null, "Total as printed"), h("td", null, pkr(total)));
+    t.appendChild(tr);
+  }
+  p.appendChild(t);
+  return p;
+}
+
+function renderBreakdown(d) {
+  const pane = $("#pane-breakdown");
+  pane.textContent = "";
+  const cols = h("div", "cols");
+  cols.append(listPanel("Charges", d.charges, d.total_charges), listPanel("Taxes", d.taxes, d.total_taxes));
+  pane.appendChild(cols);
+  const c = d.total_charges, t = d.total_taxes;
+  if (c != null && t != null && c + t > 0) {
+    const card = h("div", "card panel");
+    card.style.marginTop = "12px";
+    card.appendChild(h("h3", null, "Charges vs taxes (of the two printed totals)"));
+    const pc = (c / (c + t)) * 100, pt = 100 - pc;
+    const bar = h("div", "bar");
+    const a = h("i"); a.style.width = pc + "%";
+    const b = h("i"); b.style.width = pt + "%";
+    bar.append(a, b);
+    const lg = h("div", "legend");
+    lg.append(h("span", null, `Charges ${pc.toFixed(1)}%`), h("span", null, `Taxes ${pt.toFixed(1)}%`));
+    card.append(bar, lg);
+    pane.appendChild(card);
+  }
+}
+
+function renderDetails(d) {
+  const pane = $("#pane-details");
+  pane.textContent = "";
+  const rows = [
+    ["Provider", d.provider || NIL], ["Tariff", d.tariff || NIL],
+    ["Sanctioned load", d.sanctioned_load_kw != null ? plain(d.sanctioned_load_kw) + " kW" : NIL],
+    ["Bill month", date(d.bill_month)], ["Reading date", date(d.reading_date)],
+    ["Issue date", date(d.issue_date)], ["Due date", date(d.due_date)],
+    ["Previous reading", plain(d.previous_reading)], ["Current reading", plain(d.current_reading)],
+    ["Units consumed", plain(d.units_consumed)], ["Arrears", pkr(d.arrears)],
+    ["Current bill", pkr(d.current_bill)],
+  ];
+  const g = h("div", "card grid");
+  rows.forEach(([k, v]) => { const r = h("div", "row"); r.append(h("span", null, k), h("span", null, v)); g.appendChild(r); });
+  pane.appendChild(g);
+}
+
+function selectTab(name) {
+  document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  ["answers", "breakdown", "details", "json"].forEach((n) => $("#pane-" + n).classList.toggle("hidden", n !== name));
+}
+$("#tabs").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (b) selectTab(b.dataset.tab); });
+</script>
+</body>
+</html>

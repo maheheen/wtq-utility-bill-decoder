@@ -2,13 +2,11 @@
 
 Current model in .env: google / gemini-3.5-flash-lite, temperature 0 works fine (change if bake-off says so)
 Tool in use now: Claude Code
-Last updated: M6 done
+Last updated: UI added (optional), real test run written to ../output
 
 ## Milestones
-- [x] M0 setup  - [x] M1 llm.py + config.py  - [x] M2 extract.py Level 1 (golden test passes)  - [x] M4 extras + facts + qa
-- [ ] M3 checks.py + uncached rerun consistency test (not built; README no longer claims re-read checks)
-- [x] M5 run.py: python -m src.run --bills B --level1 T1 --level2 T2 --out OUT (dry run on ../output/fake OK, verify only fails row count 5 vs 10)
-- [x] M6 README (Python 3.14.3, AI usage from real code), requirements pinned to pip freeze, .env.example, .gitignore .env.*
-- [ ] M7 test run at 12:30, rerun diff, zip, upload
-Known issues: README line "<other chat used for layout notes>" is for the user to fill in before zipping.
-Next: read the real 12 questions at 12:30, add missing facts; M3 if time.
+- [x] M0, M1, M2, M4, M5, M6 done. Real test run: ../output/level1.csv + level2.csv, verify_outputs.py says OK (10 / 120 rows)
+- [x] UI: python -m src.ui (stdlib http.server + src/ui_page.html, no new deps), tested upload, samples, bad file, dark mode
+- [ ] M3 checks.py + uncached two-run consistency test (not built; README makes no claim about re-reads)
+- [ ] M7 rerun diff with .cache/ cleared, eyeball test bills vs images, fill README "<other chat ...>" line, make_zip.py, upload once
+Known issues: Python 3.14.3 documented; only google provider wired; test-bill answers not yet reviewed by a human.
