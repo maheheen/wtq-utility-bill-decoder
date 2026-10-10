@@ -103,5 +103,99 @@ def compute_facts(l1: dict, extras: dict) -> dict:
     if slabs:
         f["slab_lines"] = slabs
 
+    _trend_facts(f, l1, extras, usage, units, cur, cb, pay)
+
+    tiers = []
+    for t in extras.get("late_payment") or []:
+        s = _num(t.get("surcharge"))
+        tiers.append({"label": t.get("label"), "surcharge": s, "payable": _num(t.get("payable")),
+                      "surcharge_pct_of_within_due_date": _pct(s, within) if within and within > 0 else None})
+    if tiers:
+        f["late_payment_tiers_as_printed"] = tiers
+
     f["printed_split_pct"] = extras.get("printed_split")
     return f
+
+
+def _add_months(ym: str, n: int) -> str:
+    t = int(ym[:4]) * 12 + int(ym[5:]) - 1 + n
+    return f"{t // 12:04d}-{t % 12 + 1:02d}"
+
+
+def _trend_facts(f, l1, extras, usage, units, cur, cb, pay) -> None:
+    """Same month last year, seasons, 3-month trend, estimates. All numbers computed here, never by the LLM."""
+    series = dict(usage)
+    if cur and _MONTH.match(cur) and units is not None:
+        series[cur] = units
+    ordered = sorted(series.items())
+    if ordered:
+        vals = [u for _, u in ordered]
+        f["average_units_all_months_shown_including_current"] = _r(mean(vals))
+        f["months_shown_including_current"] = len(ordered)
+
+    if cur and _MONTH.match(cur) and units is not None:
+        target = _add_months(cur, -12)
+        ly = dict(usage).get(target)
+        f["same_month_last_year"] = (
+            {"month": target, "units": ly, "current_minus_then_units": _r(units - ly),
+             "change_pct": _pct(units - ly, ly) if ly else None}
+            if ly is not None else {"month": target, "units": None, "note": "that month is not in the history shown"})
+
+    def season(months):
+        rows = [(m, u) for m, u in ordered if int(m[5:]) in months]
+        if not rows:
+            return None
+        return {"months": [{"month": m, "units": u} for m, u in rows], "count": len(rows),
+                "total_units": _r(sum(u for _, u in rows)), "average_units_per_month": _r(mean(u for _, u in rows))}
+
+    summer, winter = season({6, 7, 8}), season({12, 1, 2})
+    if summer or winter:
+        f["summer_jun_aug"], f["winter_dec_feb"] = summer, winter
+        if summer and winter:
+            f["summer_minus_winter_average_units_per_month"] = _r(
+                summer["average_units_per_month"] - winter["average_units_per_month"])
+            f["summer_minus_winter_total_units"] = _r(summer["total_units"] - winter["total_units"])
+
+    if len(ordered) >= 3:
+        last3 = ordered[-3:]
+        diffs = [_r(b[1] - a[1]) for a, b in zip(last3, last3[1:])]
+        f["last_3_months"] = {
+            "months": [{"month": m, "units": u} for m, u in last3],
+            "changes_between_months": diffs,
+            "overall_change_units": _r(last3[-1][1] - last3[0][1]),
+            "direction": ("up each month" if all(d > 0 for d in diffs) else
+                          "down each month" if all(d < 0 for d in diffs) else "mixed"),
+        }
+        est = {"average_of_last_3_months": _r(mean(u for _, u in last3))}
+        n = len(ordered)
+        xs = list(range(n))
+        mx, my = mean(xs), mean(vals)
+        denom = sum((x - mx) ** 2 for x in xs)
+        slope = sum((x - mx) * (y - my) for x, y in zip(xs, vals)) / denom
+        est["linear_trend_over_all_months_shown"] = _r(max(0.0, my + slope * (n - mx)))
+        est["slope_units_per_month"] = _r(slope)
+        if cur and _MONTH.match(cur):
+            same = series.get(_add_months(cur, -11))
+            if same is not None:
+                est["same_month_last_year_as_next_month_guide"] = same
+        f["next_month_units_estimates"] = est
+
+    # bill estimate if units equal last month's
+    lm = f.get("last_month")
+    if lm:
+        e: dict = {"last_month_units": lm["units"]}
+        cpu = f.get("cost_per_unit_current_bill_over_units")
+        if cpu is not None:
+            e["this_months_cost_per_unit_times_last_month_units"] = _r(cpu * lm["units"])
+        billed_then = next((p["billed"] for p in pay if p.get("month") == lm["month"] and _num(p.get("billed")) is not None), None)
+        if billed_then is not None:
+            e["billed_amount_for_last_month_as_printed"] = billed_then
+        f["bill_estimate_if_same_units_as_last_month"] = e
+
+    billed = [p["billed"] for p in pay if _num(p.get("billed")) is not None]
+    if billed:
+        f["billing_history_average_billed_per_month"] = {
+            "months_listed": len(billed), "total_billed": _r(sum(billed)), "average_billed": _r(mean(billed))}
+        both = [p for p in pay if _num(p.get("billed")) is not None and _num(p.get("paid")) is not None]
+        f.setdefault("payment_history_summary", {})["months_paid_more_than_billed"] = [
+            p["month"] for p in both if p["paid"] > p["billed"] + 1]

@@ -17,7 +17,7 @@ log = logging.getLogger("run")
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 FAIL_ANSWER = "I could not read this bill reliably, so I cannot answer this question from it."
 EMPTY_EXTRAS = {"usage_history": [], "payment_history": [], "printed_split": {"energy_pct": None, "taxes_pct": None},
-                "slab_lines": [], "notes": []}
+                "slab_lines": [], "late_payment": [], "notes": []}
 
 
 def null_l1() -> dict:
