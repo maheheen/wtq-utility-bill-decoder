@@ -13,7 +13,7 @@ CLI that reads electricity bill images (K-Electric, LESCO, IESCO) and fills two 
 - CSVs must be produced by the code. Never hand-edit results.
 - Never output personal identifiers (names, addresses, CNIC, account, reference, consumer or meter numbers).
 - No API keys in code or in the repo. Read them from .env. Keep .env.example current.
-- Python 3.12, requirements.txt with exact versions (package==x.y.z).
+- Python 3.14.3 (tested on this version), requirements.txt with exact versions (package==x.y.z).
 - Rerun on the same bill must give the same answer: temperature 0 where the model supports it (GPT-5 mini does not), fixed prompts, disk cache, sorted keys.
 - Level 1 values are extracted AS PRINTED. Checks may trigger a re-read, but code never "corrects" a printed amount.
 
