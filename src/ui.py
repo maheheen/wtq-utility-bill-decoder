@@ -12,12 +12,15 @@ import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from PIL import Image
 
 from src.config import CACHE_DIR, load_config
-from src.run import IMAGE_EXTS, process_bill
+from src.extract import extract_extras, extract_l1
+from src.facts import compute_facts
+from src.qa import answer_bill
+from src.run import EMPTY_EXTRAS, IMAGE_EXTS, process_bill
 
 PAGE = Path(__file__).with_name("ui_page.html")
 MAX_BYTES = 20 * 1024 * 1024
@@ -30,6 +33,19 @@ def load_questions(path: Path) -> list[tuple[str, str]]:
         for r in csv.DictReader(f):
             seen.setdefault(r["question_id"], r["question"])
     return list(seen.items())
+
+
+def ask(cfg, image: Path, question: str) -> dict:
+    """Answer one free-text question about a bill, with the same rules and facts as Level 2.
+    Level 1 and extras come from the disk cache when the bill was already decoded."""
+    l1 = extract_l1(image, cfg)
+    try:
+        extras = extract_extras(image, cfg)
+    except Exception as e:
+        log.warning("extras failed: %s", type(e).__name__)
+        extras = EMPTY_EXTRAS
+    answers = answer_bill(cfg, l1, extras, compute_facts(l1, extras), [("Ask", question)])
+    return {"question": question, "answer": answers["Ask"]}
 
 
 def make_handler(cfg, questions, bills: Path):
@@ -67,8 +83,13 @@ def make_handler(cfg, questions, bills: Path):
                 self._json(404, {"error": "not found"})
 
         def do_POST(self):
-            if urlparse(self.path).path != "/api/decode":
+            parsed = urlparse(self.path)
+            route = parsed.path
+            if route not in ("/api/decode", "/api/ask"):
                 return self._json(404, {"error": "not found"})
+            question = (parse_qs(parsed.query).get("q") or [""])[0].strip()
+            if route == "/api/ask" and not 3 <= len(question) <= 500:
+                return self._json(400, {"error": "Type a question (3 to 500 characters)."})
             size = int(self.headers.get("Content-Length") or 0)
             if not 0 < size <= MAX_BYTES:
                 return self._json(413, {"error": "Image must be under 20 MB."})
@@ -81,6 +102,14 @@ def make_handler(cfg, questions, bills: Path):
             tmp.parent.mkdir(parents=True, exist_ok=True)
             tmp.write_bytes(data)
             started = time.time()
+            if route == "/api/ask":
+                try:
+                    return self._json(200, ask(cfg, tmp, question))
+                except Exception as e:
+                    log.warning("ask failed: %s", type(e).__name__)
+                    return self._json(500, {"error": "Could not answer that question."})
+                finally:
+                    tmp.unlink(missing_ok=True)
             try:
                 l1, answers = process_bill(cfg, tmp, questions)
             except Exception as e:
