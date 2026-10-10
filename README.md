@@ -51,7 +51,6 @@ Retries with backoff on API errors and rate limits. A bill that fails completely
 - AI tools used to write the code:
   - Claude Code (Sonnet)
   - Claude chat (planning and project kit)
-  - <other chat used for layout notes>
 
 ## Project layout
 ```
